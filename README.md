@@ -32,3 +32,6 @@ Android 8+. Open GitHub Actions → Android APK → successful run → PricePeek
 
 ## Optional official Flipkart adapter
 After obtaining authorized credentials and confirming permitted Android use, configure server environment variables `PRICEPEEK_FLIPKART_APPROVED=1`, `FLIPKART_AFFILIATE_ID`, and `FLIPKART_AFFILIATE_TOKEN`. Never commit credentials. Without all three, Flipkart stays link-only. The adapter uses standard selling price, not special price or MRP. Live credentials and results remain unverified. See https://affiliate.flipkart.com/api-docs/af_prod_ref.html .
+
+## Direct web adapters and hosting
+Direct web adapters now support operator-configured approval flags and reviewed product-path prefixes, with tests for robots policy and extraction. See [web validation](docs/web-validation.md). A free-plan Render blueprint is included but not deployed. All direct sources remain disabled by default.

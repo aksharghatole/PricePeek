@@ -8,7 +8,7 @@ from . import flipkart
 from .sources import SOURCES, scan, UA
 from .match import classify
 
-app = FastAPI(title="PricePeek", version="0.2.0")
+app = FastAPI(title="PricePeek", version="0.3.0")
 cache = OrderedDict()
 cache_lock = asyncio.Lock()
 semaphore = asyncio.Semaphore(3)
@@ -44,7 +44,7 @@ async def search(q: str = Query(min_length=2, max_length=120)):
               "cached": False, "offers": offers, "sources": batches,
               "notice": "Candidate offers may differ in variant. Shipping, location and checkout discounts are not verified."}
     # Do not retain transient failures or empty results for 15 minutes.
-    if not offers:
+    if not offers or any(b["status"] in {"busy","cooldown","unavailable","rate_limited","authorization_required"} for b in batches):
         return result
     async with cache_lock:
         cache[key] = (monotonic(), result)
