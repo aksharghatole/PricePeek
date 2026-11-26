@@ -20,8 +20,8 @@ Open http://127.0.0.1:8000/docs or request /v1/search?q=Logitech%20G304. With no
 - Explicit, operator-reviewed retailer configurations; no arbitrary user URL fetching.
 - On-demand search, bounded concurrency, same-host HTTPS only, robots checks, no redirect following, bounded response sizes and timeouts.
 - JSON-LD Product/Offer extraction; INR only; no speculative price conversion.
-- Conservative identity matching: all requested tokens, explicit model/variant identifiers, accessory and condition checks. Only confirmed identifiers qualify as exact matches.
-- Cache and Android app are next milestones. No background scraping or bypassing restrictions.
+- Conservative identity matching: all requested tokens, accessory and condition checks, with barcode-based identifier matches separated from title-based candidates.
+- A bounded 15-minute in-memory search cache is implemented; the Android app is a future milestone. No background scraping or bypassing restrictions.
 
 Run tests: `cd backend && python -m pytest -q`.
 
