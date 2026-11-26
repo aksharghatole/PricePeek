@@ -35,3 +35,6 @@ After obtaining authorized credentials and confirming permitted Android use, con
 
 ## Direct web adapters and hosting
 Direct web adapters now support operator-configured approval flags and reviewed product-path prefixes, with tests for robots policy and extraction. See [web validation](docs/web-validation.md). A free-plan Render blueprint is included but not deployed. All direct sources remain disabled by default.
+
+## Optional PriceYuge comparison provider
+Set `PRICEPEEK_DATAYUGE_APPROVED=1` and `DATAYUGE_API_KEY` only after authorized registration and free-plan confirmation. The adapter uses at most two requests per search and a conservative in-memory 80-call daily budget; this resets if the process restarts. The provider's prices are snapshots, typically updated daily, not live checkout prices. Affiliate redirects are preserved. See https://price-api.datayuge.com/docs/ . Preview ingress is limited to 30 searches per minute globally and four concurrent searches per process. No live credentials are configured.
