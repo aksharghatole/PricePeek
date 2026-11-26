@@ -22,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -133,6 +134,13 @@ class MainActivity : ComponentActivity() {
                 var submitted by rememberSaveable { mutableStateOf("") }
                 var busy by remember { mutableStateOf(false) }
                 var history by remember { mutableStateOf(runCatching { JSONArray(prefs.getString("history","[]")) }.getOrDefault(JSONArray()).let { a -> (0 until a.length()).map { a.optString(it) } }) }
+                var notebook by remember { mutableStateOf(readNotes(prefs.getString("price_notes","[]").orEmpty())) }
+                var noteProduct by rememberSaveable { mutableStateOf("") }
+                var noteEditor by rememberSaveable { mutableStateOf(false) }
+                fun saveNotes(value: List<PriceNote>) {
+                    notebook = value
+                    prefs.edit().putString("price_notes",encodeNotes(value)).apply()
+                }
                 val scope = rememberCoroutineScope()
                 val scanner = rememberLauncherForActivityResult(ScanContract()) { scan ->
                     val code = scan.contents
@@ -196,6 +204,14 @@ class MainActivity : ComponentActivity() {
                             Button(onClick={search()},enabled=query.trim().length>=2 && !busy,modifier=Modifier.fillMaxWidth()) { Text(if(busy) "Searching…" else "Search stores") }
                             OutlinedButton(onClick={scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.PRODUCT_CODE_TYPES).setPrompt("Scan the product barcode").setBeepEnabled(false).setBarcodeImageEnabled(false).setOrientationLocked(false))},enabled=!busy,modifier=Modifier.fillMaxWidth()) { Text("Scan barcode") }
                             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                            TextButton(onClick={
+                                val term=query.trim().take(120)
+                                openLink(this@MainActivity,"https://www.google.com/search?tbm=shop&q="+encoded(term))
+                            },enabled=query.trim().length>=2) { Text("Search shopping web") }
+                            TextButton(onClick={
+                                noteProduct=query.trim().take(120)
+                                noteEditor=true
+                            },enabled=query.trim().length>=2) { Text("Record a price manually") }
                         }
                         result?.let { r ->
                             item {
@@ -227,6 +243,30 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                        if (notebook.isNotEmpty()) {
+                            item {
+                                Text("Your price notebook",style=MaterialTheme.typography.titleLarge)
+                                Text("Prices you recorded yourself, saved on this device. Verify the exact variant and current price before purchasing.",style=MaterialTheme.typography.bodySmall)
+                            }
+                            val groups = notebook.groupBy { it.product.trim().lowercase(Locale.ROOT) }
+                            groups.values.forEach { records ->
+                                item { Text(records.first().product,style=MaterialTheme.typography.titleMedium) }
+                                items(records.sortedBy { it.totalPaise }) { note ->
+                                    OutlinedCard(Modifier.fillMaxWidth()) {
+                                        Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                                            Text(note.store,style=MaterialTheme.typography.titleMedium)
+                                            Text(price(note.totalPaise),style=MaterialTheme.typography.headlineSmall)
+                                            Text("Item "+price(note.itemPaise)+" + delivery "+price(note.deliveryPaise),style=MaterialTheme.typography.bodySmall)
+                                            Text("Recorded "+note.recordedAt.take(10)+" · Manual entry",style=MaterialTheme.typography.bodySmall)
+                                            Row {
+                                                if(note.url.isNotBlank()) TextButton(onClick={openLink(this@MainActivity,note.url)}) { Text("Open link") }
+                                                TextButton(onClick={saveNotes(notebook.filterNot { it.id==note.id })}) { Text("Remove") }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         if (result==null && !busy && history.isNotEmpty()) {
                             item {
                                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
@@ -237,6 +277,32 @@ class MainActivity : ComponentActivity() {
                             items(history) { previous -> TextButton(onClick={query=previous;search()}) {Text(previous)} }
                         }
                     }
+                }
+                if(noteEditor) {
+                    var product by remember { mutableStateOf(noteProduct) }
+                    var store by remember { mutableStateOf("") }
+                    var itemAmount by remember { mutableStateOf("") }
+                    var delivery by remember { mutableStateOf("0") }
+                    var link by remember { mutableStateOf("") }
+                    val itemPaise = parsePaise(itemAmount)
+                    val deliveryPaise = parsePaise(delivery,allowZero=true)
+                    val valid = product.isNotBlank() && store.isNotBlank() && itemPaise!=null && deliveryPaise!=null && (link.isBlank() || safeHttps(link.trim()))
+                    AlertDialog(onDismissRequest={noteEditor=false},title={Text("Record a price")},text={
+                        Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                            Text("Enter prices you have checked yourself. Include any known delivery or handling fee.")
+                            OutlinedTextField(value=product,onValueChange={product=it.take(120)},label={Text("Exact product / variant")},singleLine=true)
+                            OutlinedTextField(value=store,onValueChange={store=it.take(80)},label={Text("Store")},singleLine=true)
+                            OutlinedTextField(value=itemAmount,onValueChange={itemAmount=it.take(16)},label={Text("Item price (INR)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true)
+                            OutlinedTextField(value=delivery,onValueChange={delivery=it.take(16)},label={Text("Delivery / fees (INR)")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Decimal),singleLine=true)
+                            OutlinedTextField(value=link,onValueChange={link=it.take(1000)},label={Text("Optional HTTPS link")},singleLine=true)
+                        }
+                    },confirmButton={TextButton(enabled=valid,onClick={
+                        if(itemPaise!=null && deliveryPaise!=null) {
+                            val note=PriceNote(java.util.UUID.randomUUID().toString(),product.trim(),store.trim(),itemPaise,deliveryPaise,link.trim(),java.time.Instant.now().toString())
+                            saveNotes((listOf(note)+notebook).take(200))
+                            noteEditor=false
+                        }
+                    }){Text("Save")}},dismissButton={TextButton(onClick={noteEditor=false}){Text("Cancel")}})
                 }
                 if(settings) {
                     var draft by remember { mutableStateOf(base) }

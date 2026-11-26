@@ -9,7 +9,7 @@ from .limits import SearchLimits
 from .sources import SOURCES, scan, UA
 from .match import classify
 
-app = FastAPI(title="PricePeek", version="0.5.0")
+app = FastAPI(title="PricePeek", version="0.6.0")
 app.add_middleware(SearchLimits)
 cache = OrderedDict()
 provider_lock = asyncio.Lock()
@@ -22,7 +22,7 @@ TTL = 900
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "enabled_sources": sum(s.enabled or (s.name == 'Flipkart' and flipkart.configured()) for s in SOURCES) + int(datayuge.configured())}
+    return {"status": "ok", "version": app.version, "enabled_sources": sum(s.enabled or (s.name == 'Flipkart' and flipkart.configured()) for s in SOURCES) + int(datayuge.configured())}
 
 @app.get("/")
 async def root():

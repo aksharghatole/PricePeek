@@ -44,3 +44,6 @@ The default Android backend is https://pricepeek-api-w4qr.onrender.com . Clear t
 
 ## Android 0.2.0
 Scan physical product barcodes using the on-device ZXing scanner (camera permission only when scanning). Share a product title or supported retailer URL; PricePeek suggests a title from the URL path locally and lets you edit it. Bare IDs and shortened URLs require the product name. No URL fetching or redirects are used for identification. See [live source review](docs/live-source-review.md).
+
+## Android 0.3.0
+Manual price notebook: compare user-entered prices including delivery/fees, sorted by total within the same product label, stored locally (up to 200 entries). These are not automatically verified offers. Shopping web search opens a browser; no scraping is performed by this feature. Hosted API smoke workflow tests the deployed URL, including invalid barcode handling. The source-matching update normalizes common unit spacing and rejects additional model suffixes conservatively. The main limitation remains live automated retailer access.

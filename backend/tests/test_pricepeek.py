@@ -24,7 +24,7 @@ def test_matching():
     assert classify("Galaxy S25 256GB", {"name":"Galaxy S25 128GB"}) == "different"
     assert classify("Logitech G304", {"name":"Logitech G304 case"}) == "different"
     assert classify("Logitech G304", {"name":"Logitech G304", "condition":"RefurbishedCondition"}) == "different"
-    assert classify("1234567890123", {"name":"Item","gtin":"1234567890123"}) == "identifier_match"
+    assert classify("4006381333931", {"name":"Item","gtin":"4006381333931"}) == "identifier_match"
 
 def test_disabled_sources_never_invent_prices():
     with TestClient(app) as client:

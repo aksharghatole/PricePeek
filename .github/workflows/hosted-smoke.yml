@@ -1,0 +1,24 @@
+name: Hosted API smoke test
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/hosted-smoke.yml'
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify public API
+        env:
+          BASE: https://pricepeek-api-w4qr.onrender.com
+        run: |
+          curl --fail --silent --show-error --retry 2 --retry-all-errors --max-time 65 "$BASE/health" > health.json
+          python -c 'import json; d=json.load(open("health.json")); assert d["status"]=="ok" and isinstance(d["enabled_sources"],int); print(d)'
+          curl --fail --silent --show-error --max-time 65 "$BASE/v1/search?q=Logitech%20G304" > search.json
+          python -c 'import json; d=json.load(open("search.json")); assert d["query"]=="Logitech G304" and isinstance(d["offers"],list) and isinstance(d["sources"],list); assert all(x["currency"]=="INR" and x["price_paise"]>0 for x in d["offers"]); print("offers:",len(d["offers"]),"sources:",len(d["sources"]))'
+          status=$(curl --silent --show-error --max-time 30 -o invalid.json -w '%{http_code}' "$BASE/v1/observations?barcode=4006381333932")
+          test "$status" = 422
+          echo "Invalid barcode correctly rejected"
