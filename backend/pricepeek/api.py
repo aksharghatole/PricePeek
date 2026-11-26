@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 from time import monotonic
 import httpx
 from fastapi import FastAPI, Query, HTTPException
-from . import flipkart, datayuge, openprices, shopping_search, crowcrowcrow
+from . import flipkart, datayuge, openprices, shopping_search, crowcrowcrow, woocommerce
 from .limits import SearchLimits
 from .sources import SOURCES, scan, UA
 from .match import classify
 
-app = FastAPI(title="PricePeek", version="0.8.0")
+app = FastAPI(title="PricePeek", version="0.9.0")
 app.add_middleware(SearchLimits)
 cache = OrderedDict()
 provider_lock = asyncio.Lock()
@@ -22,13 +22,16 @@ shopping_month = None
 shopping_calls = 0
 ccc_lock = asyncio.Lock()
 ccc_next = 0.0
+woo_stores = woocommerce.stores()
+woo_locks = {s.origin:asyncio.Lock() for s in woo_stores}
+woo_next = {}
 cache_lock = asyncio.Lock()
 semaphore = asyncio.Semaphore(3)
 TTL = 900
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": app.version, "enabled_sources": sum(s.enabled or (s.name == 'Flipkart' and flipkart.configured()) for s in SOURCES) + int(datayuge.configured()) + int(shopping_search.configured()) + int(crowcrowcrow.configured())}
+    return {"status": "ok", "version": app.version, "enabled_sources": sum(s.enabled or (s.name == 'Flipkart' and flipkart.configured()) for s in SOURCES) + int(datayuge.configured()) + int(shopping_search.configured()) + int(crowcrowcrow.configured()) + len(woo_stores)}
 
 @app.get("/")
 async def root():
@@ -94,6 +97,22 @@ async def ccc_batch(client,query):
         ccc_next=monotonic()+(60 if status in ("rate_limited","authorization_required","unavailable") else 8)
         return {**result,"status":status,"offers":offers}
 
+async def woo_batch(client,store,query):
+    result={"source":store.name,"search_url":woocommerce.search_url(store,query),"status":"not_validated","offers":[]}
+    lock=woo_locks[store.origin]
+    if lock.locked():
+        return {**result,"status":"busy"}
+    async with lock:
+        if monotonic()<woo_next.get(store.origin,0):
+            return {**result,"status":"cooldown"}
+        try:
+            async with semaphore:
+                status,offers=await woocommerce.fetch(client,store,query)
+        except (httpx.HTTPError,ValueError,TimeoutError):
+            status,offers="unavailable",[]
+        woo_next[store.origin]=monotonic()+(60 if status in ("rate_limited","authorization_required","unavailable") else 5)
+        return {**result,"status":status,"offers":offers}
+
 @app.get("/v1/search")
 async def search(q: str = Query(min_length=2, max_length=120)):
     query = " ".join(q.split())
@@ -106,6 +125,7 @@ async def search(q: str = Query(min_length=2, max_length=120)):
             return {**hit[1], "cached": True}
     async with httpx.AsyncClient(timeout=5, headers={"User-Agent": UA}, trust_env=False) as client:
         tasks = [scan(s,query,client,semaphore) for s in SOURCES]
+        tasks.extend(woo_batch(client,s,query) for s in woo_stores)
         if crowcrowcrow.configured():
             tasks.append(ccc_batch(client,query))
         if datayuge.configured():
@@ -126,7 +146,7 @@ async def search(q: str = Query(min_length=2, max_length=120)):
     offers.sort(key=lambda x: (x["match"] != "identifier_match", x["price_paise"]))
     result = {"query": query, "checked_at": datetime.now(timezone.utc).isoformat(),
               "cached": False, "offers": offers, "sources": batches,
-              "notice": "Candidate offers may differ in variant. Shopping search prices are unverified listings. Provider snapshots can be a day old or more; retrieval time is not the merchant price timestamp. Shipping, location and checkout discounts are not verified."}
+              "notice": "Candidate offers may differ in variant. Shopping search prices are unverified listings. Provider snapshots can be a day old or more; retrieval time is not the merchant price timestamp. Compare exact variants and pack quantities, not just prices. Shipping, location and checkout discounts are not verified."}
     # Do not retain transient failures or empty results for 15 minutes.
     if not offers or any(b["status"] in {"busy","cooldown","unavailable","rate_limited","authorization_required"} for b in batches):
         return result

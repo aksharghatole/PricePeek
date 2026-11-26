@@ -56,3 +56,6 @@ No SerpApi key is required. Optional provider remains disabled. Copy visible pro
 
 ## Keyless retailer catalogue
 CrowCrowCrow documents a public, anonymous, read-only MCP for product discovery and shopping agents linking users to its store: https://crowcrowcrow.com/mcp . The PricePeek integration uses only documented initialization and products.search, five results per search, a per-source lock and cooldown, INR prices and same-retailer product links. Enabled by default; `PRICEPEEK_CCC_DISABLED=1` disables it. Its imported-product catalogue is a single retailer, not Amazon or Flipkart prices. No bulk crawling, account, key or purchase actions. Live verification via Keyless retailer live probe workflow is pending. SerpApi stays disabled. Other retailer sources still require validation.
+
+## Keyless integration expansion
+The CrowCrowCrow live probe at https://github.com/aksharghatole/PricePeek/actions/runs/45777576834 passed on 2026-11-26 and returned five catalogue records for `protein bar`. These are different products and pack sizes, not equivalent offers. Added opt-in WooCommerce Store API support for authorized independent retailers, with no key and mocked tests. See [store setup](docs/woocommerce.md). No WooCommerce store has been approved yet. SerpApi remains unused.

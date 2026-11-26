@@ -1,0 +1,4 @@
+# Authorized independent stores
+WooCommerce documents a public Store API for customer-facing product data: https://developer.woocommerce.com/docs/apis/store-api/resources-endpoints/products/
+No API key is required. This does not automatically grant permission to redistribute every store's data. The server is disabled for WooCommerce stores until an operator has confirmed permission and reviewed the endpoint and domain ownership.
+Configure PRICEPEEK_APPROVED_WOO_STORES as JSON, e.g. [{"name":"Example store","origin":"https://example.com","approved":true}]. The example is not an approved retailer. Up to four stores, fixed read-only products path, no user-supplied origins, no redirects, one request per search per store, separate cooldown, INR minor units, simple products only. Use a trusted public DNS host with controlled egress; the origin validation is not a general-purpose SSRF defense. No store has been approved or live-tested in this round.

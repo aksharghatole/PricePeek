@@ -24,6 +24,14 @@ def classify(query, product):
     gtin = str(product.get("gtin",""))
     if gtin in q and valid_gtin(gtin):
         return "identifier_match"
+    # If the query specifies an explicit pack count, reject conflicting counts.
+    def pack_counts(text):
+        text=unicodedata.normalize("NFKC",text).casefold()
+        return {int(n) for pair in re.findall(r"\bpack\s+of\s+(\d+)\b|\b(\d+)\s*(?:count|ct|pcs|pieces|pack)\b",text) for n in pair if n}
+    requested=pack_counts(query)
+    offered=pack_counts(str(product.get("name","")))
+    if requested and offered and requested!=offered:
+        return "different"
     # When a model identifier is in the query, do not silently include premium
     # or lite variants. Unqualified names remain candidates, never exact matches.
     model_query = any(re.search(r"[a-z]",t) and re.search(r"\d",t) and not re.fullmatch(r"\d+(gb|tb|mb|kg|mg|ml|g|l)",t) for t in q)
