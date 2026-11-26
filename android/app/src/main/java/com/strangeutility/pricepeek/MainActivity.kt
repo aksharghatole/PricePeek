@@ -113,7 +113,7 @@ private suspend fun fetch(base: String, query: String): Result = withContext(Dis
 class MainActivity : ComponentActivity() {
     private var sharedText by mutableStateOf("")
     private fun readShare(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_SEND) sharedText = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().take(500)
+        if (intent?.action == Intent.ACTION_SEND) sharedText = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().take(4000)
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -137,6 +137,18 @@ class MainActivity : ComponentActivity() {
                 var notebook by remember { mutableStateOf(readNotes(prefs.getString("price_notes","[]").orEmpty())) }
                 var noteProduct by rememberSaveable { mutableStateOf("") }
                 var noteEditor by rememberSaveable { mutableStateOf(false) }
+                var importedStore by rememberSaveable { mutableStateOf("") }
+                var importedAmount by rememberSaveable { mutableStateOf("") }
+                var importedLink by rememberSaveable { mutableStateOf("") }
+                var importEditor by rememberSaveable { mutableStateOf(false) }
+                fun beginImport(text: String) {
+                    val draft = SharedPrice.parse(text)
+                    noteProduct = draft.product.ifBlank { query.trim().take(120) }
+                    importedStore = draft.store
+                    importedAmount = draft.amount
+                    importedLink = draft.url
+                    noteEditor = true
+                }
                 fun saveNotes(value: List<PriceNote>) {
                     notebook = value
                     prefs.edit().putString("price_notes",encodeNotes(value)).apply()
@@ -155,7 +167,11 @@ class MainActivity : ComponentActivity() {
                 }
                 LaunchedEffect(sharedText) {
                     if (sharedText.isNotBlank()) {
+                        val draft = SharedPrice.parse(sharedText)
                         val suggested = SharedProduct.suggest(sharedText)
+                        if (draft.amount.isNotBlank()) {
+                            beginImport(sharedText)
+                        } else
                         if (suggested != null) {
                             query = suggested
                             result = null
@@ -208,8 +224,10 @@ class MainActivity : ComponentActivity() {
                                 val term=query.trim().take(120)
                                 openLink(this@MainActivity,"https://www.google.com/search?tbm=shop&q="+encoded(term))
                             },enabled=query.trim().length>=2) { Text("Search shopping web") }
+                            TextButton(onClick={importEditor=true},enabled=!busy) { Text("Import copied listing") }
                             TextButton(onClick={
                                 noteProduct=query.trim().take(120)
+                                importedStore=""; importedAmount=""; importedLink=""
                                 noteEditor=true
                             },enabled=query.trim().length>=2) { Text("Record a price manually") }
                         }
@@ -278,12 +296,21 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+                if(importEditor) {
+                    var pasted by rememberSaveable { mutableStateOf("") }
+                    AlertDialog(onDismissRequest={importEditor=false},title={Text("Import a web listing")},text={
+                        Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                            Text("Copy the product name, visible selling price and link from a retailer you are browsing. Paste here or use Android Share. Nothing is uploaded. Multiple prices or conditional offers require manual review.")
+                            OutlinedTextField(value=pasted,onValueChange={pasted=it.take(4000)},label={Text("Copied listing text")},minLines=4,maxLines=7)
+                        }
+                    },confirmButton={TextButton(enabled=pasted.isNotBlank(),onClick={importEditor=false;beginImport(pasted)}){Text("Review price")}},dismissButton={TextButton(onClick={importEditor=false}){Text("Cancel")}})
+                }
                 if(noteEditor) {
-                    var product by remember { mutableStateOf(noteProduct) }
-                    var store by remember { mutableStateOf("") }
-                    var itemAmount by remember { mutableStateOf("") }
+                    var product by remember(noteProduct) { mutableStateOf(noteProduct) }
+                    var store by remember(importedStore) { mutableStateOf(importedStore) }
+                    var itemAmount by remember(importedAmount) { mutableStateOf(importedAmount) }
                     var delivery by remember { mutableStateOf("0") }
-                    var link by remember { mutableStateOf("") }
+                    var link by remember(importedLink) { mutableStateOf(importedLink) }
                     val itemPaise = parsePaise(itemAmount)
                     val deliveryPaise = parsePaise(delivery,allowZero=true)
                     val valid = product.isNotBlank() && store.isNotBlank() && itemPaise!=null && deliveryPaise!=null && (link.isBlank() || safeHttps(link.trim()))

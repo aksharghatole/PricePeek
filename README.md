@@ -50,3 +50,6 @@ Manual price notebook: compare user-entered prices including delivery/fees, sort
 
 ## Optional shopping web pilot
 An opt-in Google Shopping search provider now supports India-focused multi-store search listings via SerpApi's free-plan allowance. No live credentials or approval configured. See [setup and limitations](docs/shopping-search.md). The Android UI labels these as unverified web search listings, never guaranteed live retailer prices.
+
+## Android 0.4.0 — keyless listing import
+No SerpApi key is required. Optional provider remains disabled. Copy visible product text from a browser or share it to PricePeek. The app proposes a price only for one explicit INR amount with no obvious conditional/discount language; you must review the title, retailer, price and fees before saving locally. Multiple amounts remain blank for manual review. No automated access or scraping is performed by this feature. This is browser-assisted comparison, not automatic multi-retailer price retrieval.
