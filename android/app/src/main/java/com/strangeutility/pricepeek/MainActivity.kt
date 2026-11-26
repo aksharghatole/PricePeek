@@ -32,6 +32,8 @@ import java.net.HttpURLConnection
 import java.text.NumberFormat
 import java.util.Locale
 
+private const val DEFAULT_BACKEND = "https://pricepeek-api-w4qr.onrender.com"
+
 data class Store(val name: String, val link: String, val status: String)
 data class Offer(val name: String, val source: String, val paise: Long, val link: String, val match: String, val stock: String, val method: String, val variant: String)
 data class Result(val offers: List<Offer>, val stores: List<Store>, val message: String)
@@ -60,7 +62,9 @@ private fun openLink(context: Context, value: String) {
 }
 private suspend fun fetch(base: String, query: String): Result = withContext(Dispatchers.IO) {
     require(validBase(base))
-    val connection = URL(base.trimEnd('/')+"/v1/search?q="+encoded(query)).openConnection() as HttpURLConnection
+    val barcodeLookup = query.matches(Regex("[0-9]{8}|[0-9]{12,14}"))
+    val path = if(barcodeLookup) "/v1/observations?barcode=" else "/v1/search?q="
+    val connection = URL(base.trimEnd('/')+path+encoded(query)).openConnection() as HttpURLConnection
     try {
         connection.connectTimeout = 15000
         connection.readTimeout = 35000
@@ -79,6 +83,14 @@ private suspend fun fetch(base: String, query: String): Result = withContext(Dis
             out.toString()
         }
         val data = JSONObject(body)
+        if (barcodeLookup) {
+            val observed = (data.optJSONArray("observations") ?: JSONArray()).objects().mapNotNull {
+                val url=it.optString("url"); val amount=it.optLong("price_paise",-1)
+                if(!safeHttps(url) || amount<=0 || it.optString("currency")!="INR") null
+                else Offer(it.optString("name"),it.optString("store"),amount,url,"identifier_match","Observed "+it.optString("date"),"community_observation",it.optString("city"))
+            }
+            return@withContext Result(observed,links(query),data.optString("notice")+" "+data.optString("attribution"))
+        }
         val offers = (data.optJSONArray("offers") ?: JSONArray()).objects().mapNotNull {
             val url = it.optString("url")
             val amount = it.optLong("price_paise",-1)
@@ -112,7 +124,7 @@ class MainActivity : ComponentActivity() {
             val dark = isSystemInDarkTheme()
             MaterialTheme(colorScheme = if(dark) darkColorScheme(primary=Color(0xFF9ED7BB)) else lightColorScheme(primary=Color(0xFF176847))) {
                 var query by rememberSaveable { mutableStateOf("") }
-                var base by rememberSaveable { mutableStateOf(prefs.getString("backend","").orEmpty()) }
+                var base by rememberSaveable { mutableStateOf(prefs.getString("backend",DEFAULT_BACKEND).orEmpty()) }
                 var settings by rememberSaveable { mutableStateOf(false) }
                 var result by remember { mutableStateOf<Result?>(null) }
                 var submitted by rememberSaveable { mutableStateOf("") }
@@ -152,9 +164,10 @@ class MainActivity : ComponentActivity() {
                                 TextButton(onClick={ settings=true },enabled=!busy) { Text("Settings") }
                             }
                             Text("Search once. Compare everywhere.",style=MaterialTheme.typography.bodyMedium)
+                            Text(if(base.isBlank()) "Retailer link mode" else "Online comparison · your query is sent to the configured server",style=MaterialTheme.typography.bodySmall)
                         }
                         item {
-                            OutlinedTextField(value=query,onValueChange={query=it.take(120)},modifier=Modifier.fillMaxWidth(),label={Text("Product name or model")},singleLine=true,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),keyboardActions=KeyboardActions(onSearch={search()}))
+                            OutlinedTextField(value=query,onValueChange={query=it.take(120)},modifier=Modifier.fillMaxWidth(),label={Text("Product name, model or barcode")},singleLine=true,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),keyboardActions=KeyboardActions(onSearch={search()}))
                             Spacer(Modifier.height(8.dp))
                             Button(onClick={search()},enabled=query.trim().length>=2 && !busy,modifier=Modifier.fillMaxWidth()) { Text(if(busy) "Searching…" else "Search stores") }
                             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -163,18 +176,18 @@ class MainActivity : ComponentActivity() {
                             item {
                                 Text("Results for "+submitted,style=MaterialTheme.typography.titleLarge)
                                 Text(r.message,style=MaterialTheme.typography.bodySmall)
-                                if(r.offers.isEmpty()) Text("No verified prices available",style=MaterialTheme.typography.titleMedium)
+                                if(r.offers.isEmpty()) Text("No matching price records available",style=MaterialTheme.typography.titleMedium)
                             }
                             items(r.offers) { offer ->
                                 OutlinedCard(Modifier.fillMaxWidth()) {
                                     Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
                                         Text(offer.name,style=MaterialTheme.typography.titleMedium)
                                         Text(offer.source+" · "+offer.stock)
-                                        Text(when(offer.method) { "provider_snapshot" -> "Provider snapshot — price may be outdated"; "public_web" -> "Retrieved from retailer website"; "affiliate_api" -> "Retailer API price"; else -> "Price source not specified" },style=MaterialTheme.typography.bodySmall)
+                                        Text(when(offer.method) { "community_observation" -> "Historical community observation — not a live offer"; "provider_snapshot" -> "Provider snapshot — price may be outdated"; "public_web" -> "Retrieved from retailer website"; "affiliate_api" -> "Retailer API price"; else -> "Price source not specified" },style=MaterialTheme.typography.bodySmall)
                                         if(offer.variant.isNotBlank()) Text("Variant: "+offer.variant,style=MaterialTheme.typography.bodySmall)
                                         Text(price(offer.paise),style=MaterialTheme.typography.headlineSmall,color=MaterialTheme.colorScheme.primary)
                                         Text(if(offer.match=="identifier_match") "Identifier match — verify variant" else "Possible match — verify model and variant",style=MaterialTheme.typography.bodySmall)
-                                        TextButton(onClick={openLink(this@MainActivity,offer.link)}) { Text("View offer") }
+                                        TextButton(onClick={openLink(this@MainActivity,offer.link)}) { Text(if(offer.method=="community_observation") "View observation" else "View offer") }
                                     }
                                 }
                             }
@@ -205,7 +218,8 @@ class MainActivity : ComponentActivity() {
                     val valid = draft.isBlank() || validBase(draft.trim())
                     AlertDialog(onDismissRequest={settings=false},title={Text("Comparison server")},text={
                         Column {
-                            Text("Optional HTTPS PricePeek backend. Without a server, only retailer search links are shown. Searches sent to a configured server include your product query.")
+                            Text("PricePeek uses its default free hosted server. Clear the address for retailer-link-only mode. Searches sent to a configured server include your product query.")
+                            TextButton(onClick={draft=DEFAULT_BACKEND}) { Text("Restore default server") }
                             OutlinedTextField(value=draft,onValueChange={draft=it},label={Text("https://your-server.example")},singleLine=true,isError=!valid)
                         }
                     },confirmButton={TextButton(enabled=valid,onClick={base=draft.trim();prefs.edit().putString("backend",base).apply();settings=false}){Text("Save")}},dismissButton={TextButton(onClick={settings=false}){Text("Cancel")}})

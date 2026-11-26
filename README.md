@@ -38,3 +38,6 @@ Direct web adapters now support operator-configured approval flags and reviewed 
 
 ## Optional PriceYuge comparison provider
 Set `PRICEPEEK_DATAYUGE_APPROVED=1` and `DATAYUGE_API_KEY` only after authorized registration and free-plan confirmation. The adapter uses at most two requests per search and a conservative in-memory 80-call daily budget; this resets if the process restarts. The provider's prices are snapshots, typically updated daily, not live checkout prices. Affiliate redirects are preserved. See https://price-api.datayuge.com/docs/ . Preview ingress is limited to 30 searches per minute globally and four concurrent searches per process. No live credentials are configured.
+
+## Hosted preview and open observations
+The default Android backend is https://pricepeek-api-w4qr.onrender.com . Clear the server address in Settings to use local retailer links only. Numeric GTIN searches use a separate `/v1/observations?barcode=...` endpoint for historical community observations in INR from Open Prices, with ODbL attribution and links. Not live online offers; India coverage may be sparse. No external API key needed. No live response has been independently verified yet. API: https://openfoodfacts.github.io/documentation/docs/Open-prices/prices/prices_list/ . Data license: https://openfoodfacts.github.io/open-prices/guides/data/ .

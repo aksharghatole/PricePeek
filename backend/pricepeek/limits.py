@@ -15,7 +15,7 @@ class SearchLimits:
         self.lock=asyncio.Lock()
 
     async def __call__(self, scope, receive, send):
-        if scope["type"]!="http" or scope["path"]!="/v1/search":
+        if scope["type"]!="http" or scope["path"] not in ("/v1/search","/v1/observations"):
             await self.app(scope,receive,send)
             return
         async with self.lock:

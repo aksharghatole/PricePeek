@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 from time import monotonic
 import httpx
 from fastapi import FastAPI, Query, HTTPException
-from . import flipkart, datayuge
+from . import flipkart, datayuge, openprices
 from .limits import SearchLimits
 from .sources import SOURCES, scan, UA
 from .match import classify
 
-app = FastAPI(title="PricePeek", version="0.4.0")
+app = FastAPI(title="PricePeek", version="0.5.0")
 app.add_middleware(SearchLimits)
 cache = OrderedDict()
 provider_lock = asyncio.Lock()
@@ -85,3 +85,26 @@ async def search(q: str = Query(min_length=2, max_length=120)):
         while len(cache) > 128:
             cache.popitem(last=False)
     return result
+
+# Separate endpoint to avoid mixing ODbL observations and proprietary retail offers.
+open_lock = asyncio.Lock()
+open_next = 0.0
+
+@app.get("/v1/observations")
+async def observations(barcode: str = Query(min_length=8,max_length=14)):
+    global open_next
+    if not openprices.valid_barcode(barcode):
+        raise HTTPException(422, "Invalid GTIN check digit or length")
+    async with open_lock:
+        if monotonic() < open_next:
+            raise HTTPException(429, "Please retry in a few seconds")
+        open_next=monotonic()+5
+        try:
+            async with asyncio.timeout(12):
+                async with httpx.AsyncClient(timeout=8,headers={"User-Agent":UA},trust_env=False) as client:
+                    items=await openprices.fetch(client,barcode)
+        except (httpx.HTTPError,ValueError,TimeoutError):
+            raise HTTPException(503,"Open Prices temporarily unavailable")
+    return {"barcode":barcode,"observations":items,"attribution":openprices.ATTRIBUTION,
+            "license":"https://opendatacommons.org/licenses/odbl/1-0/",
+            "notice":"Historical community observations in INR, not current offers or checkout prices. Coverage may be sparse."}
