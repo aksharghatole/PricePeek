@@ -1,0 +1,29 @@
+name: Hosted keyless retailer verification
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/hosted-keyless.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check hosted search returns actual retailer catalogue records
+        env:
+          BASE: https://pricepeek-api-w4qr.onrender.com
+        run: |
+          curl --fail --silent --show-error --retry 2 --retry-all-errors --max-time 65 "$BASE/health" > health.json
+          python -c 'import json; d=json.load(open("health.json")); assert d["enabled_sources"]>=1, d; print(d)'
+          curl --fail --silent --show-error --max-time 65 "$BASE/v1/search?q=protein%20bar" > search.json
+          python - <<'PY'
+          import json
+          d=json.load(open("search.json"))
+          offers=[x for x in d["offers"] if x.get("source")=="CrowCrowCrow" and x.get("data_method")=="retailer_mcp"]
+          assert offers, d["sources"]
+          assert all(x["currency"]=="INR" and x["price_paise"]>0 for x in offers)
+          print("Hosted retailer offers:",len(offers))
+          print("Comparison groups:",d.get("comparison_group_count","older API"))
+          PY

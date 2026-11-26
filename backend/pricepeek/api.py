@@ -8,8 +8,9 @@ from . import flipkart, datayuge, openprices, shopping_search, crowcrowcrow, woo
 from .limits import SearchLimits
 from .sources import SOURCES, scan, UA
 from .match import classify
+from .comparison import assign_groups
 
-app = FastAPI(title="PricePeek", version="0.9.0")
+app = FastAPI(title="PricePeek", version="0.10.0")
 app.add_middleware(SearchLimits)
 cache = OrderedDict()
 provider_lock = asyncio.Lock()
@@ -143,9 +144,10 @@ async def search(q: str = Query(min_length=2, max_length=120)):
             if match != "different" and identity not in seen:
                 seen.add(identity)
                 offers.append({**offer, "source": source_name, "match": match})
-    offers.sort(key=lambda x: (x["match"] != "identifier_match", x["price_paise"]))
+    comparison_count = assign_groups(offers)
+    offers.sort(key=lambda x: (not bool(x.get("comparison_group")), x.get("comparison_group",""), x["price_paise"]))
     result = {"query": query, "checked_at": datetime.now(timezone.utc).isoformat(),
-              "cached": False, "offers": offers, "sources": batches,
+              "cached": False, "offers": offers, "sources": batches, "comparison_group_count": comparison_count,
               "notice": "Candidate offers may differ in variant. Shopping search prices are unverified listings. Provider snapshots can be a day old or more; retrieval time is not the merchant price timestamp. Compare exact variants and pack quantities, not just prices. Shipping, location and checkout discounts are not verified."}
     # Do not retain transient failures or empty results for 15 minutes.
     if not offers or any(b["status"] in {"busy","cooldown","unavailable","rate_limited","authorization_required"} for b in batches):

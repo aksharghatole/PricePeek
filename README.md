@@ -59,3 +59,6 @@ CrowCrowCrow documents a public, anonymous, read-only MCP for product discovery 
 
 ## Keyless integration expansion
 The CrowCrowCrow live probe at https://github.com/aksharghatole/PricePeek/actions/runs/45777576834 passed on 2026-11-26 and returned five catalogue records for `protein bar`. These are different products and pack sizes, not equivalent offers. Added opt-in WooCommerce Store API support for authorized independent retailers, with no key and mocked tests. See [store setup](docs/woocommerce.md). No WooCommerce store has been approved yet. SerpApi remains unused.
+
+## Android 0.5.0 — comparison groups
+The API groups offers only when at least two distinct retailer labels report the same valid GTIN with compatible reported condition and variant fields. Other product listings remain separate and clearly labeled. A hosted keyless verification workflow tests real catalogue retrieval through Render. See [multi-retailer roadmap](docs/multi-retailer-roadmap.md). No live cross-retailer comparison has been established yet.

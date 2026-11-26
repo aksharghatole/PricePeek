@@ -39,7 +39,7 @@ import java.util.Locale
 private const val DEFAULT_BACKEND = "https://pricepeek-api-w4qr.onrender.com"
 
 data class Store(val name: String, val link: String, val status: String)
-data class Offer(val name: String, val source: String, val paise: Long, val link: String, val match: String, val stock: String, val method: String, val variant: String)
+data class Offer(val name: String, val source: String, val paise: Long, val link: String, val match: String, val stock: String, val method: String, val variant: String, val group: String = "")
 data class Result(val offers: List<Offer>, val stores: List<Store>, val message: String)
 private fun encoded(q: String) = Uri.encode(q)
 private fun links(q: String): List<Store> = listOf(
@@ -99,8 +99,8 @@ private suspend fun fetch(base: String, query: String): Result = withContext(Dis
             val url = it.optString("url")
             val amount = it.optLong("price_paise",-1)
             if (!safeHttps(url) || amount <= 0 || it.optString("currency") != "INR") null
-            else Offer(it.optString("name"),it.optString("source"),amount,url,it.optString("match"),it.optString("availability"),it.optString("data_method"),it.optString("variant"))
-        }.sortedBy { it.paise }
+            else Offer(it.optString("name"),it.optString("source"),amount,url,it.optString("match"),it.optString("availability"),it.optString("data_method"),it.optString("variant"),it.optString("comparison_group"))
+        }.sortedWith(compareBy<Offer> { it.group.isBlank() }.thenBy { it.group }.thenBy { it.paise })
         val stores = (data.optJSONArray("sources") ?: JSONArray()).objects().mapNotNull {
             val url = it.optString("search_url")
             if (!safeHttps(url)) null else Store(it.optString("source"),url,it.optString("status").replace('_',' '))
@@ -237,18 +237,30 @@ class MainActivity : ComponentActivity() {
                                 Text(r.message,style=MaterialTheme.typography.bodySmall)
                                 if(r.offers.isEmpty()) Text("No matching price records available",style=MaterialTheme.typography.titleMedium)
                             }
-                            items(r.offers) { offer ->
+                            val groupedOffers = r.offers.groupBy { it.group }
+                            groupedOffers.forEach { (group, entries) ->
+                                item {
+                                    Text(when {
+                                        group.isNotBlank() -> "Shared product identifier · "+entries.map { it.source }.distinct().size+" retailers"
+                                        entries.all { it.method=="community_observation" } -> "Historical observations"
+                                        else -> "Other product listings"
+                                    },style=MaterialTheme.typography.titleMedium)
+                                    if(group.isBlank() && entries.any { it.method!="community_observation" }) Text("These may be different products or variants; prices are not directly comparable.",style=MaterialTheme.typography.bodySmall)
+                                    if(group.isNotBlank()) Text("Same reported GTIN; verify condition, variant and fees before buying.",style=MaterialTheme.typography.bodySmall)
+                                }
+                                items(entries) { offer ->
                                 OutlinedCard(Modifier.fillMaxWidth()) {
                                     Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
                                         Text(offer.name,style=MaterialTheme.typography.titleMedium)
                                         Text(offer.source+" · "+offer.stock)
-                                        Text(when(offer.method) { "community_observation" -> "Historical community observation — not a live offer"; "retailer_mcp" -> "Retailer catalogue — verify final checkout price"; "shopping_search" -> "Web search listing — verify price at store"; "provider_snapshot" -> "Provider snapshot — price may be outdated"; "public_web" -> "Retrieved from retailer website"; "affiliate_api" -> "Retailer API price"; else -> "Price source not specified" },style=MaterialTheme.typography.bodySmall)
+                                        Text(when(offer.method) { "community_observation" -> "Historical community observation — not a live offer"; "retailer_api" -> "Retailer catalogue API — verify final checkout price"; "retailer_mcp" -> "Retailer catalogue — verify final checkout price"; "shopping_search" -> "Web search listing — verify price at store"; "provider_snapshot" -> "Provider snapshot — price may be outdated"; "public_web" -> "Retrieved from retailer website"; "affiliate_api" -> "Retailer API price"; else -> "Price source not specified" },style=MaterialTheme.typography.bodySmall)
                                         if(offer.variant.isNotBlank()) Text("Variant: "+offer.variant,style=MaterialTheme.typography.bodySmall)
                                         Text(price(offer.paise),style=MaterialTheme.typography.headlineSmall,color=MaterialTheme.colorScheme.primary)
                                         Text(if(offer.match=="identifier_match") "Identifier match — verify variant" else "Possible match — verify model and variant",style=MaterialTheme.typography.bodySmall)
                                         TextButton(onClick={openLink(this@MainActivity,offer.link)}) { Text(if(offer.method=="community_observation") "View observation" else "View offer") }
                                     }
                                 }
+                            }
                             }
                             item { Text("Retailer search links",style=MaterialTheme.typography.titleLarge) }
                             items(r.stores) { store ->
