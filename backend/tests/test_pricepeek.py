@@ -26,7 +26,9 @@ def test_matching():
     assert classify("Logitech G304", {"name":"Logitech G304", "condition":"RefurbishedCondition"}) == "different"
     assert classify("4006381333931", {"name":"Item","gtin":"4006381333931"}) == "identifier_match"
 
-def test_disabled_sources_never_invent_prices():
+def test_disabled_sources_never_invent_prices(monkeypatch):
+    from pricepeek import crowcrowcrow
+    monkeypatch.setenv('PRICEPEEK_CCC_DISABLED','1')
     with TestClient(app) as client:
         r = client.get("/v1/search", params={"q":"Logitech G304"})
         assert r.status_code == 200

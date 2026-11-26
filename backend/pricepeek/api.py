@@ -4,12 +4,12 @@ from datetime import datetime, timezone
 from time import monotonic
 import httpx
 from fastapi import FastAPI, Query, HTTPException
-from . import flipkart, datayuge, openprices, shopping_search
+from . import flipkart, datayuge, openprices, shopping_search, crowcrowcrow
 from .limits import SearchLimits
 from .sources import SOURCES, scan, UA
 from .match import classify
 
-app = FastAPI(title="PricePeek", version="0.7.0")
+app = FastAPI(title="PricePeek", version="0.8.0")
 app.add_middleware(SearchLimits)
 cache = OrderedDict()
 provider_lock = asyncio.Lock()
@@ -20,13 +20,15 @@ shopping_lock = asyncio.Lock()
 shopping_next = 0.0
 shopping_month = None
 shopping_calls = 0
+ccc_lock = asyncio.Lock()
+ccc_next = 0.0
 cache_lock = asyncio.Lock()
 semaphore = asyncio.Semaphore(3)
 TTL = 900
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": app.version, "enabled_sources": sum(s.enabled or (s.name == 'Flipkart' and flipkart.configured()) for s in SOURCES) + int(datayuge.configured()) + int(shopping_search.configured())}
+    return {"status": "ok", "version": app.version, "enabled_sources": sum(s.enabled or (s.name == 'Flipkart' and flipkart.configured()) for s in SOURCES) + int(datayuge.configured()) + int(shopping_search.configured()) + int(crowcrowcrow.configured())}
 
 @app.get("/")
 async def root():
@@ -74,6 +76,24 @@ async def shopping_batch(client,query):
         shopping_next=monotonic()+(60 if status in ("rate_limited","authorization_required","unavailable") else 2)
         return {**result,"status":status,"offers":offers}
 
+async def ccc_batch(client,query):
+    global ccc_next
+    result={"source":"CrowCrowCrow","search_url":"https://crowcrowcrow.com/","status":"not_validated","offers":[]}
+    if not crowcrowcrow.configured():
+        return result
+    if ccc_lock.locked():
+        return {**result,"status":"busy"}
+    async with ccc_lock:
+        if monotonic()<ccc_next:
+            return {**result,"status":"cooldown"}
+        try:
+            status,offers=await crowcrowcrow.fetch(client,query)
+        except (httpx.HTTPError,ValueError,TimeoutError):
+            status,offers="unavailable",[]
+        # At most four HTTP messages per search, at least 8 seconds between searches.
+        ccc_next=monotonic()+(60 if status in ("rate_limited","authorization_required","unavailable") else 8)
+        return {**result,"status":status,"offers":offers}
+
 @app.get("/v1/search")
 async def search(q: str = Query(min_length=2, max_length=120)):
     query = " ".join(q.split())
@@ -86,6 +106,8 @@ async def search(q: str = Query(min_length=2, max_length=120)):
             return {**hit[1], "cached": True}
     async with httpx.AsyncClient(timeout=5, headers={"User-Agent": UA}, trust_env=False) as client:
         tasks = [scan(s,query,client,semaphore) for s in SOURCES]
+        if crowcrowcrow.configured():
+            tasks.append(ccc_batch(client,query))
         if datayuge.configured():
             tasks.append(provider_batch(client,query))
         if shopping_search.configured():

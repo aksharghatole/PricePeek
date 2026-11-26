@@ -53,3 +53,6 @@ An opt-in Google Shopping search provider now supports India-focused multi-store
 
 ## Android 0.4.0 — keyless listing import
 No SerpApi key is required. Optional provider remains disabled. Copy visible product text from a browser or share it to PricePeek. The app proposes a price only for one explicit INR amount with no obvious conditional/discount language; you must review the title, retailer, price and fees before saving locally. Multiple amounts remain blank for manual review. No automated access or scraping is performed by this feature. This is browser-assisted comparison, not automatic multi-retailer price retrieval.
+
+## Keyless retailer catalogue
+CrowCrowCrow documents a public, anonymous, read-only MCP for product discovery and shopping agents linking users to its store: https://crowcrowcrow.com/mcp . The PricePeek integration uses only documented initialization and products.search, five results per search, a per-source lock and cooldown, INR prices and same-retailer product links. Enabled by default; `PRICEPEEK_CCC_DISABLED=1` disables it. Its imported-product catalogue is a single retailer, not Amazon or Flipkart prices. No bulk crawling, account, key or purchase actions. Live verification via Keyless retailer live probe workflow is pending. SerpApi stays disabled. Other retailer sources still require validation.

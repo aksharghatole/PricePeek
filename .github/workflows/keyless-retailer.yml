@@ -1,0 +1,38 @@
+name: Keyless retailer live probe
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'backend/pricepeek/crowcrowcrow.py'
+      - '.github/workflows/keyless-retailer.yml'
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Probe documented public retailer endpoint
+        run: |
+          python - <<'PY'
+          import asyncio
+          import httpx
+          from pricepeek.crowcrowcrow import fetch
+          from pricepeek.sources import UA
+          async def run():
+              async with httpx.AsyncClient(headers={"User-Agent":UA},trust_env=False) as client:
+                  status,offers=await fetch(client,"protein bar")
+              print("source=CrowCrowCrow", "status="+status, "offer_count="+str(len(offers)))
+              assert status=="retrieved" and offers, "No live catalogue offers retrieved"
+              for offer in offers:
+                  print(offer["name"],offer["price_paise"],offer["currency"],offer["url"])
+          asyncio.run(run())
+          PY
