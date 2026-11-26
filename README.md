@@ -47,3 +47,6 @@ Scan physical product barcodes using the on-device ZXing scanner (camera permiss
 
 ## Android 0.3.0
 Manual price notebook: compare user-entered prices including delivery/fees, sorted by total within the same product label, stored locally (up to 200 entries). These are not automatically verified offers. Shopping web search opens a browser; no scraping is performed by this feature. Hosted API smoke workflow tests the deployed URL, including invalid barcode handling. The source-matching update normalizes common unit spacing and rejects additional model suffixes conservatively. The main limitation remains live automated retailer access.
+
+## Optional shopping web pilot
+An opt-in Google Shopping search provider now supports India-focused multi-store search listings via SerpApi's free-plan allowance. No live credentials or approval configured. See [setup and limitations](docs/shopping-search.md). The Android UI labels these as unverified web search listings, never guaranteed live retailer prices.
