@@ -4,13 +4,13 @@ from datetime import datetime, timezone
 from time import monotonic
 import httpx
 from fastapi import FastAPI, Query, HTTPException
-from . import flipkart, datayuge, openprices, shopping_search, crowcrowcrow, woocommerce
+from . import flipkart, datayuge, openprices, shopping_search, crowcrowcrow, woocommerce, priceinindia
 from .limits import SearchLimits
 from .sources import SOURCES, scan, UA
 from .match import classify
 from .comparison import assign_groups
 
-app = FastAPI(title="PricePeek", version="0.10.0")
+app = FastAPI(title="PricePeek", version="0.11.0")
 app.add_middleware(SearchLimits)
 cache = OrderedDict()
 provider_lock = asyncio.Lock()
@@ -23,6 +23,8 @@ shopping_month = None
 shopping_calls = 0
 ccc_lock = asyncio.Lock()
 ccc_next = 0.0
+pii_lock = asyncio.Lock()
+pii_next = 0.0
 woo_stores = woocommerce.stores()
 woo_locks = {s.origin:asyncio.Lock() for s in woo_stores}
 woo_next = {}
@@ -32,7 +34,7 @@ TTL = 900
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": app.version, "enabled_sources": sum(s.enabled or (s.name == 'Flipkart' and flipkart.configured()) for s in SOURCES) + int(datayuge.configured()) + int(shopping_search.configured()) + int(crowcrowcrow.configured()) + len(woo_stores)}
+    return {"status": "ok", "version": app.version, "enabled_sources": sum(s.enabled or (s.name == 'Flipkart' and flipkart.configured()) for s in SOURCES) + int(datayuge.configured()) + int(shopping_search.configured()) + int(crowcrowcrow.configured()) + len(woo_stores) + int(priceinindia.configured())}
 
 @app.get("/")
 async def root():
@@ -114,6 +116,21 @@ async def woo_batch(client,store,query):
         woo_next[store.origin]=monotonic()+(60 if status in ("rate_limited","authorization_required","unavailable") else 5)
         return {**result,"status":status,"offers":offers}
 
+async def pii_batch(client, query):
+    global pii_next
+    result={"source":"PriceInIndia","search_url":"https://www.priceinindia.website/","status":"not_validated","offers":[]}
+    if pii_lock.locked():
+        return {**result,"status":"busy"}
+    async with pii_lock:
+        if monotonic()<pii_next:
+            return {**result,"status":"cooldown"}
+        try:
+            status,offers,delay=await priceinindia.fetch(client,query)
+        except (httpx.HTTPError,ValueError,TimeoutError):
+            status,offers,delay="unavailable",[],60
+        pii_next=monotonic()+max(10,delay)
+        return {**result,"status":status,"offers":offers}
+
 @app.get("/v1/search")
 async def search(q: str = Query(min_length=2, max_length=120)):
     query = " ".join(q.split())
@@ -129,6 +146,8 @@ async def search(q: str = Query(min_length=2, max_length=120)):
         tasks.extend(woo_batch(client,s,query) for s in woo_stores)
         if crowcrowcrow.configured():
             tasks.append(ccc_batch(client,query))
+        if priceinindia.configured():
+            tasks.append(pii_batch(client,query))
         if datayuge.configured():
             tasks.append(provider_batch(client,query))
         if shopping_search.configured():

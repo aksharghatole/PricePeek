@@ -39,7 +39,7 @@ import java.util.Locale
 private const val DEFAULT_BACKEND = "https://pricepeek-api-w4qr.onrender.com"
 
 data class Store(val name: String, val link: String, val status: String)
-data class Offer(val name: String, val source: String, val paise: Long, val link: String, val match: String, val stock: String, val method: String, val variant: String, val group: String = "")
+data class Offer(val name: String, val source: String, val paise: Long, val link: String, val match: String, val stock: String, val method: String, val variant: String, val group: String = "", val observedAt: String = "", val citation: String = "")
 data class Result(val offers: List<Offer>, val stores: List<Store>, val message: String)
 private fun encoded(q: String) = Uri.encode(q)
 private fun links(q: String): List<Store> = listOf(
@@ -99,7 +99,7 @@ private suspend fun fetch(base: String, query: String): Result = withContext(Dis
             val url = it.optString("url")
             val amount = it.optLong("price_paise",-1)
             if (!safeHttps(url) || amount <= 0 || it.optString("currency") != "INR") null
-            else Offer(it.optString("name"),it.optString("source"),amount,url,it.optString("match"),it.optString("availability"),it.optString("data_method"),it.optString("variant"),it.optString("comparison_group"))
+            else Offer(it.optString("name"),it.optString("source"),amount,url,it.optString("match"),it.optString("availability"),it.optString("data_method"),it.optString("variant"),it.optString("comparison_group"),it.optString("observed_at"),it.optString("citation_url"))
         }.sortedWith(compareBy<Offer> { it.group.isBlank() }.thenBy { it.group }.thenBy { it.paise })
         val stores = (data.optJSONArray("sources") ?: JSONArray()).objects().mapNotNull {
             val url = it.optString("search_url")
@@ -253,10 +253,12 @@ class MainActivity : ComponentActivity() {
                                     Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
                                         Text(offer.name,style=MaterialTheme.typography.titleMedium)
                                         Text(offer.source+" · "+offer.stock)
-                                        Text(when(offer.method) { "community_observation" -> "Historical community observation — not a live offer"; "retailer_api" -> "Retailer catalogue API — verify final checkout price"; "retailer_mcp" -> "Retailer catalogue — verify final checkout price"; "shopping_search" -> "Web search listing — verify price at store"; "provider_snapshot" -> "Provider snapshot — price may be outdated"; "public_web" -> "Retrieved from retailer website"; "affiliate_api" -> "Retailer API price"; else -> "Price source not specified" },style=MaterialTheme.typography.bodySmall)
+                                        Text(when(offer.method) { "community_observation" -> "Historical community observation — not a live offer"; "retailer_api" -> "Retailer catalogue API — verify final checkout price"; "retailer_mcp" -> "Retailer catalogue — verify final checkout price"; "shopping_search" -> "Web search listing — verify price at store"; "priceinindia_snapshot" -> "PriceInIndia observation — verify store price"; "provider_snapshot" -> "Provider snapshot — price may be outdated"; "public_web" -> "Retrieved from retailer website"; "affiliate_api" -> "Retailer API price"; else -> "Price source not specified" },style=MaterialTheme.typography.bodySmall)
+                                        if(offer.observedAt.isNotBlank()) Text("Price observed: "+offer.observedAt,style=MaterialTheme.typography.bodySmall)
                                         if(offer.variant.isNotBlank()) Text("Variant: "+offer.variant,style=MaterialTheme.typography.bodySmall)
                                         Text(price(offer.paise),style=MaterialTheme.typography.headlineSmall,color=MaterialTheme.colorScheme.primary)
                                         Text(if(offer.match=="identifier_match") "Identifier match — verify variant" else "Possible match — verify model and variant",style=MaterialTheme.typography.bodySmall)
+                                        if(safeHttps(offer.citation)) TextButton(onClick={openLink(this@MainActivity,offer.citation)}) { Text("Price data source") }
                                         TextButton(onClick={openLink(this@MainActivity,offer.link)}) { Text(if(offer.method=="community_observation") "View observation" else "View offer") }
                                     }
                                 }

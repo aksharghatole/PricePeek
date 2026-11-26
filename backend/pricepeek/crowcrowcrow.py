@@ -59,9 +59,9 @@ def parse(result):
                        "data_method":"retailer_mcp","variant":""})
     return offers
 
-async def rpc(client, payload, session_headers, expected):
+async def rpc(client, payload, session_headers, expected, endpoint=ENDPOINT):
     headers={"Accept":"application/json, text/event-stream","Content-Type":"application/json",**session_headers}
-    async with client.stream("POST",ENDPOINT,json=payload,headers=headers,follow_redirects=False,timeout=8) as response:
+    async with client.stream("POST",endpoint,json=payload,headers=headers,follow_redirects=False,timeout=8) as response:
         response.raise_for_status()
         sid=response.headers.get("Mcp-Session-Id")
         if expected is None:

@@ -62,3 +62,6 @@ The CrowCrowCrow live probe at https://github.com/aksharghatole/PricePeek/action
 
 ## Android 0.5.0 — comparison groups
 The API groups offers only when at least two distinct retailer labels report the same valid GTIN with compatible reported condition and variant fields. Other product listings remain separate and clearly labeled. A hosted keyless verification workflow tests real catalogue retrieval through Render. See [multi-retailer roadmap](docs/multi-retailer-roadmap.md). No live cross-retailer comparison has been established yet.
+
+## Optional PriceInIndia keyless evaluation
+A documented public MCP adapter is ready for evaluation, with observation timestamps, preserved source attribution and affiliate redirects. Public use remains disabled pending terms review. See [details](docs/priceinindia.md). SerpApi remains unused.

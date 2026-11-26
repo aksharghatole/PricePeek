@@ -1,0 +1,31 @@
+name: PriceInIndia single-query evaluation
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Evaluate public MCP without enabling production
+        run: |
+          python - <<'PY'
+          import asyncio
+          import httpx
+          from pricepeek.priceinindia import fetch
+          from pricepeek.sources import UA
+          async def main():
+              async with httpx.AsyncClient(headers={"User-Agent":UA},trust_env=False) as client:
+                  status,offers,_=await fetch(client,"Sony WH-1000XM5")
+              print("status",status,"valid listings",len(offers),"distinct retailers",len({x["source"] for x in offers}))
+              assert status=="retrieved" and offers
+          asyncio.run(main())
+          PY
