@@ -6,8 +6,11 @@ import asyncio
 import httpx
 from bs4 import BeautifulSoup
 from .extract import extract, same_host
+from . import flipkart
 
-UA = "PricePeek/0.1"
+UA = "PricePeek/0.2 (+https://github.com/aksharghatole/PricePeek)"
+flipkart_lock = asyncio.Lock()
+flipkart_next = 0.0
 MAX_BYTES = 1_500_000
 
 @dataclass(frozen=True)
@@ -39,6 +42,19 @@ async def get_text(client, url):
 
 async def scan(source, query, client, semaphore):
     url = source.search_url(query)
+    global flipkart_next
+    if source.name == 'Flipkart' and flipkart.configured():
+        async with semaphore, flipkart_lock:
+            now = asyncio.get_running_loop().time()
+            if now < flipkart_next:
+                return {"source": source.name, "status": "cooldown", "search_url": url, "offers": []}
+            try:
+                status, offers = await flipkart.fetch(client, query)
+                flipkart_next = asyncio.get_running_loop().time() + (60 if status in ('rate_limited','authorization_required') else 1)
+            except (httpx.HTTPError, ValueError, TimeoutError):
+                status, offers = 'unavailable', []
+                flipkart_next = asyncio.get_running_loop().time() + 30
+            return {"source": source.name, "status": status, "search_url": url, "offers": offers}
     if not source.enabled:
         return {"source": source.name, "status": "not_validated", "search_url": url, "offers": []}
     async with semaphore:

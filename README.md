@@ -29,3 +29,6 @@ See [retailer validation](docs/retailer-validation.md) before enabling any live 
 
 ## Android
 Android 8+. Open GitHub Actions → Android APK → successful run → PricePeek-debug-apk artifact. The app works in retailer-link mode without a backend. In Settings, enter your trusted HTTPS PricePeek backend origin to enable offer retrieval. Shared text can prefill a product name; URL-only shares require manual product identification. Search history is local and can be cleared. See [data source research](docs/data-source-research.md).
+
+## Optional official Flipkart adapter
+After obtaining authorized credentials and confirming permitted Android use, configure server environment variables `PRICEPEEK_FLIPKART_APPROVED=1`, `FLIPKART_AFFILIATE_ID`, and `FLIPKART_AFFILIATE_TOKEN`. Never commit credentials. Without all three, Flipkart stays link-only. The adapter uses standard selling price, not special price or MRP. Live credentials and results remain unverified. See https://affiliate.flipkart.com/api-docs/af_prod_ref.html .
