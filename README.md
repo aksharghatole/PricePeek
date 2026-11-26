@@ -1,6 +1,8 @@
 # PricePeek
 Search once. Compare everywhere.
 
+[Status](#status) · [Run locally](#run-locally) · [Technical reference](#technical-reference)
+
 Android-first, India-focused, on-demand shopping comparison. No account or paid data dependency for the initial version.
 
 ## Status
@@ -15,6 +17,11 @@ pip install -r requirements.txt
 uvicorn pricepeek.api:app --reload
 ```
 Open http://127.0.0.1:8000/docs or request /v1/search?q=Logitech%20G304. With no approved adapters, the response contains search links and source status, not prices.
+
+## Technical reference
+
+<details>
+<summary>Implementation, Android setup and validation</summary>
 
 ## Design
 - Explicit, operator-reviewed retailer configurations; no arbitrary user URL fetching.
@@ -65,3 +72,5 @@ The API groups offers only when at least two distinct retailer labels report the
 
 ## Optional PriceInIndia keyless evaluation
 A documented public MCP adapter is ready for evaluation, with observation timestamps, preserved source attribution and affiliate redirects. Public use remains disabled pending terms review. See [details](docs/priceinindia.md). SerpApi remains unused.
+
+</details>
