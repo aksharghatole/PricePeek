@@ -41,3 +41,6 @@ Set `PRICEPEEK_DATAYUGE_APPROVED=1` and `DATAYUGE_API_KEY` only after authorized
 
 ## Hosted preview and open observations
 The default Android backend is https://pricepeek-api-w4qr.onrender.com . Clear the server address in Settings to use local retailer links only. Numeric GTIN searches use a separate `/v1/observations?barcode=...` endpoint for historical community observations in INR from Open Prices, with ODbL attribution and links. Not live online offers; India coverage may be sparse. No external API key needed. No live response has been independently verified yet. API: https://openfoodfacts.github.io/documentation/docs/Open-prices/prices/prices_list/ . Data license: https://openfoodfacts.github.io/open-prices/guides/data/ .
+
+## Android 0.2.0
+Scan physical product barcodes using the on-device ZXing scanner (camera permission only when scanning). Share a product title or supported retailer URL; PricePeek suggests a title from the URL path locally and lets you edit it. Bare IDs and shortened URLs require the product name. No URL fetching or redirects are used for identification. See [live source review](docs/live-source-review.md).

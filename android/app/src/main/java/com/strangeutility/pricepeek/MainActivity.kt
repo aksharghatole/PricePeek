@@ -6,6 +6,9 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -131,15 +134,36 @@ class MainActivity : ComponentActivity() {
                 var busy by remember { mutableStateOf(false) }
                 var history by remember { mutableStateOf(runCatching { JSONArray(prefs.getString("history","[]")) }.getOrDefault(JSONArray()).let { a -> (0 until a.length()).map { a.optString(it) } }) }
                 val scope = rememberCoroutineScope()
+                val scanner = rememberLauncherForActivityResult(ScanContract()) { scan ->
+                    val code = scan.contents
+                    if (code != null) {
+                        if (validGtin(code)) {
+                            query = code
+                            result = null
+                        } else {
+                            android.widget.Toast.makeText(this@MainActivity,"Not a valid product barcode. Try again.",android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
                 LaunchedEffect(sharedText) {
                     if (sharedText.isNotBlank()) {
-                        val cleaned = sharedText.replace(Regex("https?://\\S+")," ").trim()
-                        if (cleaned.isNotEmpty()) query = cleaned.take(120)
-                        else android.widget.Toast.makeText(this@MainActivity,"Shared link received. Enter its product name to compare.",android.widget.Toast.LENGTH_LONG).show()
+                        val suggested = SharedProduct.suggest(sharedText)
+                        if (suggested != null) {
+                            query = suggested
+                            result = null
+                        } else {
+                            android.widget.Toast.makeText(this@MainActivity,"No product name found in this link. Enter its name or model.",android.widget.Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
                 fun search() {
-                    val q = query.trim().take(120)
+                    val input = query.trim()
+                    val q = (if (input.startsWith("https://",true) || input.startsWith("http://",true)) SharedProduct.suggest(input) else input)?.take(120)
+                    if (q == null) {
+                        android.widget.Toast.makeText(this@MainActivity,"This link does not include a product name. Enter the name or model.",android.widget.Toast.LENGTH_LONG).show()
+                        return
+                    }
+                    query = q
                     if (q.length < 2 || busy) return
                     submitted = q
                     busy = true
@@ -167,9 +191,10 @@ class MainActivity : ComponentActivity() {
                             Text(if(base.isBlank()) "Retailer link mode" else "Online comparison · your query is sent to the configured server",style=MaterialTheme.typography.bodySmall)
                         }
                         item {
-                            OutlinedTextField(value=query,onValueChange={query=it.take(120)},modifier=Modifier.fillMaxWidth(),label={Text("Product name, model or barcode")},singleLine=true,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),keyboardActions=KeyboardActions(onSearch={search()}))
+                            OutlinedTextField(value=query,onValueChange={query=it.take(500)},modifier=Modifier.fillMaxWidth(),label={Text("Product name, model, barcode or link")},singleLine=true,keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),keyboardActions=KeyboardActions(onSearch={search()}))
                             Spacer(Modifier.height(8.dp))
                             Button(onClick={search()},enabled=query.trim().length>=2 && !busy,modifier=Modifier.fillMaxWidth()) { Text(if(busy) "Searching…" else "Search stores") }
+                            OutlinedButton(onClick={scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.PRODUCT_CODE_TYPES).setPrompt("Scan the product barcode").setBeepEnabled(false).setBarcodeImageEnabled(false).setOrientationLocked(false))},enabled=!busy,modifier=Modifier.fillMaxWidth()) { Text("Scan barcode") }
                             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                         }
                         result?.let { r ->
